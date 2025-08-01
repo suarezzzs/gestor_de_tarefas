@@ -3,21 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Task extends Model
+class TaskHistory extends Model
 {
-    use SoftDeletes;
-
     protected $fillable = [
+        'project_id',
+        'task_id',
         'title',
         'description',
         'status',
         'priority',
         'due_date',
-        'order',
-        'project_id',
         'user_id',
+        'action',
+        'deleted_by',
+        'deleted_at',
+    ];
+
+    protected $casts = [
+        'due_date' => 'date',
+        'deleted_at' => 'datetime',
     ];
 
     public function project()
@@ -25,13 +30,18 @@ class Task extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function task()
+    {
+        return $this->belongsTo(Task::class);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    public function checklistItems()
+    public function deletedBy()
     {
-        return $this->hasMany(ChecklistItem::class);
+        return $this->belongsTo(User::class, 'deleted_by');
     }
 }

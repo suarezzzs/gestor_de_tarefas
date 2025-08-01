@@ -24,6 +24,21 @@
         </div>
 
         <div>
+            <x-input-label for="photo" :value="__('Profile Photo')" />
+            <div class="mt-2 flex items-center gap-4">
+                @if($user->photo)
+                    <img src="{{ asset('storage/' . $user->photo) }}" alt="Profile Photo" class="h-16 w-16 rounded-full object-cover">
+                @else
+                    <div class="h-16 w-16 rounded-full bg-slate-700 flex items-center justify-center">
+                        <i class="fa-solid fa-user text-white text-xl"></i>
+                    </div>
+                @endif
+                <input type="file" name="photo" id="photo" accept="image/*" class="form-input">
+            </div>
+            <x-input-error class="mt-2" :messages="$errors->get('photo')" />
+        </div>
+
+        <div>
             <x-input-label for="email" :value="__('Email')" />
             <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email', $user->email)" required autocomplete="username" />
             <x-input-error class="mt-2" :messages="$errors->get('email')" />

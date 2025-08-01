@@ -87,6 +87,16 @@ class ProjectPolicy
     }
 
     /**
+     * Determina se o usuário pode criar tarefas no projeto.
+     *
+     * Regra: Qualquer membro do projeto pode criar tarefas.
+     */
+    public function createTask(User $user, Project $project): bool
+    {
+        return $project->members()->where('user_id', $user->id)->exists();
+    }
+
+    /**
      * Os métodos restore e forceDelete são para Soft Deletes.
      */
     public function restore(User $user, Project $project): bool

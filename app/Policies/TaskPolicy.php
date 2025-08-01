@@ -27,11 +27,10 @@ class TaskPolicy
 
     public function update(User $user, Task $task): bool
     {
-        // Apenas admin do projeto pode atualizar
+        // Qualquer membro do projeto pode atualizar a task
         $project = $task->project;
         if (!$project) return false;
-        $member = $project->members()->where('user_id', $user->id)->first();
-        return $member && $member->pivot->role === 'admin';
+        return $project->members()->where('user_id', $user->id)->exists();
     }
 
     public function delete(User $user, Task $task): bool

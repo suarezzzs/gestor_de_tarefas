@@ -1,14 +1,4 @@
-<div class="flex h-screen" 
-     x-data="{ 
-        showNewProjectModal: @entangle('showNewProjectModal'),
-        showNewTaskModal: @entangle('showNewTaskModal'),
-        showHistoryModal: @entangle('showHistoryModal'),
-        showShareModal: @entangle('showShareModal'),
-        showDeleteProjectModal: @entangle('showDeleteProjectModal'),
-        showDeleteTaskModal: @entangle('showDeleteTaskModal')
-     }"
-     @keydown.escape.window="showNewProjectModal = false; showNewTaskModal = false">
-    <!-- Barra Lateral -->
+<div class="flex h-screen">
     <aside class="w-64 flex-shrink-0 bg-[#0c0b15] p-4 flex flex-col justify-between">
         <div>
             <div class="flex items-center gap-3 mb-8 px-2">
@@ -19,7 +9,7 @@
             <nav class="flex flex-col gap-1">
                 @forelse ($projects as $project)
                     <a href="#" wire:click.prevent="selectProject({{ $project->id }})" 
-                       class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ optional($activeProject)->id == $project->id ? 'bg-violet-600 text-white font-semibold' : 'hover:bg-slate-700/50 text-slate-300' }}">
+                       class="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors {{ $activeProjectId == $project->id ? 'bg-violet-600 text-white font-semibold' : 'hover:bg-slate-700/50 text-slate-300' }}">
                         <i class="fa-solid fa-rocket w-5 text-center"></i>
                         <span>{{ $project->name }}</span>
                     </a>
@@ -33,10 +23,8 @@
         </button>
     </aside>
 
-    <!-- Conteúdo Principal -->
     <main class="flex-1 p-8 flex flex-col overflow-y-auto">
         @if ($activeProject)
-            <!-- Cabeçalho -->
             <header class="flex justify-between items-center mb-6 flex-shrink-0">
                 <div>
                     <h1 class="text-3xl font-bold text-white">{{ $activeProject->name }}</h1>
@@ -74,16 +62,10 @@
                         <i class="fa-solid fa-trash mr-2"></i>Deletar Projeto
                     </button>
                     <div class="relative">
-                        <button id="notification-btn" onclick="window.toggleNotifications()" class="text-slate-400 hover:text-white text-xl transition-colors">
+                        <button id="notification-btn" class="text-slate-400 hover:text-white text-xl transition-colors">
                             <i class="fa-solid fa-bell"></i>
                             <span id="notification-dot" class="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full" style="display: none;"></span>
                         </button>
-                        <div id="notification-panel" class="absolute right-0 mt-2 w-80 bg-slate-800 border border-slate-700 rounded-lg shadow-lg p-4 z-20" style="display: none;">
-                            <p class="font-bold text-white mb-2">Notificações</p>
-                            <div id="notification-list" class="text-sm text-slate-300 space-y-3">
-                                <p><i class="fa-solid fa-bolt text-violet-400 mr-2"></i><b>{{ Auth::user()->name }}</b> atribuiu uma nova tarefa a você: "Implementar Login com Google".</p>
-                            </div>
-                        </div>
                     </div>
                     <button wire:click="openNewTaskModal" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-5 rounded-lg transition-colors">
                         <i class="fa-solid fa-plus mr-2"></i>Criar Tarefa
@@ -91,7 +73,6 @@
                 </div>
             </header>
 
-            <!-- Quadro Kanban -->
             <div id="kanban-board" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 flex-1">
                 @php
                     $columns = [
@@ -109,7 +90,7 @@
                             {{ $column['title'] }} ({{ $tasks->where('status', $status)->count() }})
                         </h2>
                         <div class="kanban-column space-y-4 pt-2 flex-1" data-status="{{ $status }}" 
-                             @dragover.prevent @drop="window.handleDrop($event, '{{ $status }}')">
+                             @dragover.prevent @drop="$wire.updateTaskStatus($event.dataTransfer.getData('taskId'), '{{ $status }}', Array.from(event.target.children).map(el => el.id.split('-')[1]))">
                             @foreach ($tasks->where('status', $status) as $index => $task)
                                 @php
                                     $isOwner = $task->user_id == Auth::id();
@@ -123,7 +104,7 @@
                                      class="task-card {{ $expiredClass }} p-4 rounded-lg {{ $isOwner ? 'cursor-grab' : 'opacity-60 cursor-not-allowed' }}" 
                                      style="animation-delay: {{ $index * 50 }}ms;" 
                                      draggable="{{ $isOwner }}" 
-                                     @dragstart="window.handleDragStart($event, {{ $task->id }})"
+                                     @dragstart="event.dataTransfer.setData('taskId', {{ $task->id }});"
                                      wire:click="{{ $isOwner ? "openTaskModal($task->id)" : '' }}"
                                      wire:key="task-{{ $task->id }}">
                                     <div class="flex justify-between items-start">
@@ -150,7 +131,6 @@
                 @endforeach
             </div>
             
-            <!-- Seção de Tarefas Expiradas -->
             @php
                 $expiredTasks = $tasks->filter(function($task) {
                     $dueDate = $task->due_date ? \Carbon\Carbon::parse($task->due_date) : null;
@@ -191,35 +171,30 @@
             </div>
         @endif
     </main>
-
-    <!-- Modal: Criar Novo Projeto -->
-    <div x-show="showNewProjectModal" class="fixed inset-0 z-50 flex items-center justify-center" style="display: none;">
-        <div @click="showNewProjectModal = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div @click.outside="showNewProjectModal = false" class="auth-card w-full max-w-lg rounded-xl p-8 z-10">
-            <h3 class="text-2xl font-bold text-white mb-6">Criar Novo Projeto</h3>
+    
+    <x-modal entangleProperty="showNewProjectModal">
+        <x-slot name="title">Criar Novo Projeto</x-slot>
+        <x-slot name="body">
             <form wire:submit.prevent="createProject" class="space-y-4">
                 <div>
                     <input wire:model.defer="newProjectName" type="text" placeholder="Nome do Projeto" class="form-input text-lg" autofocus>
                     @error('newProjectName') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
                 </div>
                 <textarea wire:model.defer="newProjectDescription" placeholder="Descrição breve do projeto (opcional)" rows="3" class="form-input"></textarea>
-                
-                <div class="flex justify-end gap-4 pt-4">
-                    <button type="button" @click="showNewProjectModal = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-                    <button type="submit" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg">
-                        <span wire:loading.remove wire:target="createProject">Criar Projeto</span>
-                        <span wire:loading wire:target="createProject">A Criar...</span>
-                    </button>
-                </div>
             </form>
-        </div>
-    </div>
+        </x-slot>
+        <x-slot name="footer">
+            <button type="button" @click="show = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
+            <button type="submit" wire:click="createProject" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg">
+                <span wire:loading.remove wire:target="createProject">Criar Projeto</span>
+                <span wire:loading wire:target="createProject">A Criar...</span>
+            </button>
+        </x-slot>
+    </x-modal>
 
-    <!-- Modal: Criar Nova Tarefa -->
-    <div x-show="showNewTaskModal" class="fixed inset-0 z-50 flex items-center justify-center" style="display: none;">
-        <div @click="showNewTaskModal = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div @click.outside="showNewTaskModal = false" class="auth-card w-full max-w-lg rounded-xl p-8 z-10">
-            <h3 class="text-2xl font-bold text-white mb-6">Criar Nova Tarefa</h3>
+    <x-modal entangleProperty="showNewTaskModal">
+        <x-slot name="title">Criar Nova Tarefa</x-slot>
+        <x-slot name="body">
             <form wire:submit.prevent="createTask" class="space-y-4">
                 <input wire:model.defer="newTaskTitle" type="text" placeholder="Título da Tarefa" class="form-input text-lg" autofocus>
                 @error('newTaskTitle') <span class="text-red-500 text-xs mt-1">{{ $message }}</span> @enderror
@@ -252,7 +227,6 @@
                     <input wire:model.defer="newTaskDueDate" type="date" class="form-input">
                 </div>
 
-                <!-- Seção de Testes/Checklist -->
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="text-xs text-slate-400">Casos de Teste</label>
@@ -276,49 +250,39 @@
                         @endforelse
                     </div>
                 </div>
-                
-                <div class="flex justify-end gap-4 pt-4">
-                    <button type="button" @click="showNewTaskModal = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-                    <button type="submit" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg">
-                        <span wire:loading.remove wire:target="createTask">Criar Tarefa</span>
-                        <span wire:loading wire:target="createTask">A Criar...</span>
-                    </button>
-                </div>
             </form>
-        </div>
-    </div>
+        </x-slot>
+        <x-slot name="footer">
+            <button type="button" @click="show = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
+            <button type="submit" wire:click="createTask" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg">
+                <span wire:loading.remove wire:target="createTask">Criar Tarefa</span>
+                <span wire:loading wire:target="createTask">A Criar...</span>
+            </button>
+        </x-slot>
+    </x-modal>
 
-    <!-- Modal: Detalhes da Tarefa -->
     @if($selectedTask)
-    <div class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" wire:click="closeAllModals"></div>
-        <div class="auth-card w-full max-w-2xl rounded-xl p-8 z-10 max-h-[80vh] overflow-y-auto">
-            <div class="flex items-start justify-between mb-6">
-                <h3 class="text-2xl font-bold text-white">{{ $selectedTask->title }}</h3>
-                <button wire:click="closeAllModals" class="text-slate-400 hover:text-white text-2xl">&times;</button>
-            </div>
-            
+    <x-modal entangleProperty="showTaskModal">
+        <x-slot name="title">{{ $selectedTask->title }}</x-slot>
+        <x-slot name="body">
             <div class="space-y-6">
-                <!-- Status e Responsável -->
                 <div class="flex items-center gap-4 text-sm text-slate-400">
                     <span>Status: <span class="font-semibold text-white">{{ $columns[$selectedTask->status]['title'] ?? $selectedTask->status }}</span></span>
                     <span>Responsável: <span class="font-semibold text-white">{{ $selectedTask->user->name ?? 'N/A' }}</span></span>
                     <span>Prioridade: <span class="font-semibold text-white">{{ $priorityMap[$selectedTask->priority]['text'] ?? $selectedTask->priority }}</span></span>
                 </div>
 
-                <!-- Descrição -->
                 <div>
                     <h4 class="font-bold text-white mb-2">Descrição</h4>
                     <p class="text-slate-300">{{ $selectedTask->description ?: 'Nenhuma descrição fornecida.' }}</p>
                 </div>
 
-                <!-- Casos de Teste -->
                 <div>
                     <h4 class="font-bold text-white mb-4">Casos de Teste</h4>
                     <div class="space-y-2">
                         @forelse ($selectedTask->checklistItems as $index => $item)
                             <div class="flex items-center gap-3 p-3 rounded-lg {{ $item->is_completed ? 'bg-green-500/10 border border-green-500/20' : 'bg-slate-800 border border-slate-700' }}">
-                                <button wire:click="toggleChecklistItem({{ $selectedTask->id }}, {{ $index }})" 
+                                <button wire:click="toggleChecklistItem({{ $selectedTask->id }}, {{ $item->id }})" 
                                         class="flex-shrink-0 w-5 h-5 rounded-full border-2 {{ $item->is_completed ? 'bg-green-500 border-green-500' : 'border-slate-500' }} flex items-center justify-center">
                                     @if($item->is_completed)
                                         <i class="fa-solid fa-check text-white text-xs"></i>
@@ -332,7 +296,6 @@
                     </div>
                 </div>
 
-                <!-- Data de Vencimento -->
                 @if($selectedTask->due_date)
                 <div>
                     <h4 class="font-bold text-white mb-2">Data de Vencimento</h4>
@@ -340,19 +303,16 @@
                 </div>
                 @endif
             </div>
-
-            <div class="flex justify-end gap-4 pt-6">
-                <button wire:click="closeAllModals" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Fechar</button>
-            </div>
-        </div>
-    </div>
+        </x-slot>
+        <x-slot name="footer">
+            <button wire:click="closeAllModals" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Fechar</button>
+        </x-slot>
+    </x-modal>
     @endif
 
-    <!-- Modal: Histórico -->
-    <div x-show="showHistoryModal" class="fixed inset-0 z-50 flex items-center justify-center" style="display: none;">
-        <div @click="showHistoryModal = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div @click.outside="showHistoryModal = false" class="auth-card w-full max-w-4xl rounded-xl p-8 z-10 max-h-[80vh] overflow-y-auto">
-            <h3 class="text-2xl font-bold text-white mb-6">Histórico do Projeto</h3>
+    <x-modal entangleProperty="showHistoryModal">
+        <x-slot name="title">Histórico do Projeto</x-slot>
+        <x-slot name="body">
             <div class="space-y-4">
                 @if($activeProject)
                     @php
@@ -402,17 +362,15 @@
                     @endforelse
                 @endif
             </div>
-            <div class="flex justify-end pt-4">
-                <button @click="showHistoryModal = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Fechar</button>
-            </div>
-        </div>
-    </div>
+        </x-slot>
+        <x-slot name="footer">
+            <button @click="show = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Fechar</button>
+        </x-slot>
+    </x-modal>
 
-    <!-- Modal: Compartilhar Projeto -->
-    <div x-show="showShareModal" class="fixed inset-0 z-50 flex items-center justify-center" style="display: none;">
-        <div @click="showShareModal = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div @click.outside="showShareModal = false" class="auth-card w-full max-w-lg rounded-xl p-8 z-10">
-            <h3 class="text-2xl font-bold text-white mb-6">Compartilhar Projeto</h3>
+    <x-modal entangleProperty="showShareModal">
+        <x-slot name="title">Compartilhar Projeto</x-slot>
+        <x-slot name="body">
             <div class="space-y-4">
                 <p class="text-slate-300">Compartilhe este link com outros usuários para adicioná-los ao projeto:</p>
                 <div class="flex gap-2">
@@ -423,66 +381,57 @@
                 </div>
                 <p class="text-xs text-slate-500">Este link expira em 7 dias.</p>
             </div>
-            <div class="flex justify-end gap-4 pt-4">
-                <button wire:click="closeShareModal" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Fechar</button>
-            </div>
-        </div>
-    </div>
+        </x-slot>
+        <x-slot name="footer">
+            <button wire:click="closeShareModal" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Fechar</button>
+        </x-slot>
+    </x-modal>
 
-    <!-- Modal: Deletar Projeto -->
-    <div x-show="showDeleteProjectModal" class="fixed inset-0 z-50 flex items-center justify-center" style="display: none;">
-        <div @click="showDeleteProjectModal = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div @click.outside="showDeleteProjectModal = false" class="auth-card w-full max-w-lg rounded-xl p-8 z-10">
-            <h3 class="text-2xl font-bold text-white mb-6">Deletar Projeto</h3>
-            <div class="space-y-4">
-                <p class="text-slate-300">Tem certeza que deseja deletar o projeto <strong>{{ $projectToDelete->name ?? '' }}</strong>?</p>
-                <p class="text-sm text-red-400">Esta ação não pode ser desfeita. Todas as tarefas serão movidas para o histórico.</p>
-            </div>
-            <div class="flex justify-end gap-4 pt-4">
-                <button @click="showDeleteProjectModal = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-                <button wire:click="deleteProject" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
-                    <span wire:loading.remove wire:target="deleteProject">Deletar</span>
-                    <span wire:loading wire:target="deleteProject">Deletando...</span>
-                </button>
-            </div>
-        </div>
-    </div>
+    <x-modal entangleProperty="showDeleteProjectModal" type="danger">
+        <x-slot name="title">Deletar Projeto</x-slot>
+        <x-slot name="body">
+            <p class="text-slate-300">Tem certeza que deseja deletar o projeto <strong>{{ $projectToDelete->name ?? '' }}</strong>?</p>
+            <p class="text-sm text-red-400">Esta ação não pode ser desfeita. Todas as tarefas serão movidas para o histórico.</p>
+        </x-slot>
+        <x-slot name="footer">
+            <x-danger-button wire:click="deleteProject">
+                <span wire:loading.remove wire:target="deleteProject">Deletar</span>
+                <span wire:loading wire:target="deleteProject">Deletando...</span>
+            </x-danger-button>
+            <button @click="show = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
+        </x-slot>
+    </x-modal>
 
-    <!-- Modal: Deletar Tarefa -->
-    <div x-show="showDeleteTaskModal" class="fixed inset-0 z-50 flex items-center justify-center" style="display: none;">
-        <div @click="showDeleteTaskModal = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div @click.outside="showDeleteTaskModal = false" class="auth-card w-full max-w-lg rounded-xl p-8 z-10">
-            <h3 class="text-2xl font-bold text-white mb-6">Deletar Tarefa</h3>
-            <div class="space-y-4">
-                <p class="text-slate-300">Tem certeza que deseja deletar a tarefa <strong>{{ $taskToDelete->title ?? '' }}</strong>?</p>
-                <p class="text-sm text-red-400">Esta ação não pode ser desfeita. A tarefa será movida para o histórico.</p>
-            </div>
-            <div class="flex justify-end gap-4 pt-4">
-                <button @click="showDeleteTaskModal = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
-                <button wire:click="deleteTask" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">
-                    <span wire:loading.remove wire:target="deleteTask">Deletar</span>
-                    <span wire:loading wire:target="deleteTask">Deletando...</span>
-                </button>
-            </div>
-        </div>
-    </div>
+    <x-modal entangleProperty="showDeleteTaskModal" type="danger">
+        <x-slot name="title">Deletar Tarefa</x-slot>
+        <x-slot name="body">
+            <p class="text-slate-300">Tem certeza que deseja deletar a tarefa <strong>{{ $taskToDelete->title ?? '' }}</strong>?</p>
+            <p class="text-sm text-red-400">Esta ação não pode ser desfeita. A tarefa será movida para o histórico.</p>
+        </x-slot>
+        <x-slot name="footer">
+            <x-danger-button wire:click="deleteTask">
+                <span wire:loading.remove wire:target="deleteTask">Deletar</span>
+                <span wire:loading wire:target="deleteTask">Deletando...</span>
+            </x-danger-button>
+            <button @click="show = false" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
+        </x-slot>
+    </x-modal>
 </div>
 
 <script>
-function copyShareLink() {
-    const input = document.getElementById('share-link-input');
-    input.select();
-    document.execCommand('copy');
-    
-    // Mostrar feedback
-    const button = event.target.closest('button');
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fa-solid fa-check"></i>';
-    button.classList.add('bg-green-600');
-    
-    setTimeout(() => {
-        button.innerHTML = originalText;
-        button.classList.remove('bg-green-600');
-    }, 2000);
-}
+    function copyShareLink() {
+        const input = document.getElementById('share-link-input');
+        input.select();
+        document.execCommand('copy');
+        
+        const button = event.target.closest('button');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fa-solid fa-check"></i>';
+        button.classList.add('bg-green-600');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('bg-green-600');
+        }, 2000);
+    }
 </script>
